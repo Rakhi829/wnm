@@ -1,0 +1,108 @@
+
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/point-to-point-module.h"
+#include "ns3/applications-module.h"
+
+using namespace ns3;
+
+NS_LOG_COMPONENT_DEFINE("RouteOnlySim");
+
+// Function to print routing table
+void PrintRoutingTable(Ptr<Node> node) {
+
+    Ipv4StaticRoutingHelper helper;
+
+    Ptr<Ipv4> ipv4 = node->GetObject<Ipv4>();
+
+    Ptr<Ipv4StaticRouting> routing =
+        helper.GetStaticRouting(ipv4);
+
+    routing->PrintRoutingTable(
+        Create<OutputStreamWrapper>(&std::cout));
+}
+
+// Function to delete static route
+void DeleteRoute(Ptr<Node> node) {
+
+    Ipv4StaticRoutingHelper helper;
+
+    Ptr<Ipv4> ipv4 = node->GetObject<Ipv4>();
+
+    Ptr<Ipv4StaticRouting> routing =
+        helper.GetStaticRouting(ipv4);
+
+    for (uint32_t i = 0; i < routing->GetNRoutes(); i++) {
+
+        if (routing->GetRoute(i).GetDest() ==
+            Ipv4Address("10.1.1.2")) {
+
+            routing->RemoveRoute(i);
+
+            std::cout << "Static Route Deleted" << std::endl;
+            break;
+        }
+    }
+}
+
+int main() {
+
+    LogComponentEnable("RouteOnlySim", LOG_LEVEL_INFO);
+
+    NodeContainer nodes;
+    nodes.Create(2);
+
+    PointToPointHelper p2p;
+
+    p2p.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
+
+    p2p.SetChannelAttribute("Delay", StringValue("2ms"));
+
+    NetDeviceContainer devices = p2p.Install(nodes);
+
+    InternetStackHelper stack;
+    stack.Install(nodes);
+
+    Ipv4AddressHelper address;
+
+    address.SetBase("10.1.1.0", "255.255.255.0");
+
+    Ipv4InterfaceContainer interfaces =
+        address.Assign(devices);
+
+    // Add static route
+    Ipv4StaticRoutingHelper helper;
+
+    Ptr<Ipv4StaticRouting> routing =
+        helper.GetStaticRouting(
+            nodes.Get(0)->GetObject<Ipv4>());
+
+    routing->AddHostRouteTo(
+        interfaces.GetAddress(1),
+        interfaces.GetAddress(1), 1);
+
+    // Print routing table before deletion
+    Simulator::Schedule(
+        Seconds(2.0),
+        &PrintRoutingTable,
+        nodes.Get(0));
+
+    // Delete static route after 5 seconds
+    Simulator::Schedule(
+        Seconds(5.0),
+        &DeleteRoute,
+        nodes.Get(0));
+
+    // Print routing table after deletion
+    Simulator::Schedule(
+        Seconds(6.0),
+        &PrintRoutingTable,
+        nodes.Get(0));
+
+    Simulator::Run();
+
+    Simulator::Destroy();
+
+    return 0;
+}
